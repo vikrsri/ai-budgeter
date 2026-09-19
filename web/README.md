@@ -1,126 +1,72 @@
-# vinext-starter
+# Ledger
 
-A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
+A private budgeting app for your actual credit card transactions. The workspace starts empty: there is no sample-data generator or Sandbox mode.
 
-## Prerequisites
+- Connect credit cards using Plaid Production Link, including bank OAuth redirects.
+- Sync transactions, including changes, removals, and pending-to-posted transitions.
+- View per-card history, recurring-payment estimates, and spending summaries.
+- Import Amex and Discover CSVs in a separate view so overlapping history is never totaled twice.
+- Ask OpenAI for insights when an API key is configured; otherwise use clearly labeled instant calculations.
 
-- Node.js `>=22.13.0`
-- Portable: Windows, macOS, or Linux; no Bash required
-- Managed Linux: managed Linux runtime with Bash, `flock`, `curl`, `sha256sum`, and GNU `timeout`
-- Git is required only for publishing
+## Run locally
 
-## Sites Lifecycle
-
-The Sites initializer copies the shared starter and selects managed-linux only when `SITES_MANAGED_LINUX_CONTAINER=1`; otherwise it selects portable. It saves the selection only in ignored `.sites-runtime/execution-profile.json`. Both profiles copy/configure first, then use the plugin's separate `install-dependencies.mjs` step to measure installation independently. Edit source under `app/` and follow the Sites skill for installation, preview, builds, and publishing.
-
-Whenever reopening or moving a checkout, run `node <plugin-root>/scripts/configure-execution-profile.mjs` before project commands. Profile changes do not alter tracked source or require reinstalling otherwise-valid dependencies; restart an existing preview to use the new selection. Do not commit or upload `.sites-runtime/`.
-
-This starter does not use `wrangler.jsonc`.
-
-`install:ci` runs `npm ci` once against the shared lockfile, disables parent-workspace discovery, and includes required dev/optional dependencies despite production/omit settings. Sharp defaults to prebuilt binaries unless explicitly configured otherwise. Do not overlap installers.
-
-- **Portable:** Preserve host HOME, npm cache, registry, proxy, temporary paths, retry/concurrency settings, and lifecycle-script policy. Use `--prefer-offline --no-audit --no-fund`.
-- **Managed Linux:** Use the existing project-local HOME/cache/tmp setup and Linux install lock, tarball preflight, and timeout. Restore the image-seeded npm cache only when its lockfile hash matches; retain network fallback. Builds keep their existing timeout. These helpers are not invoked by the portable profile.
-
-`scripts/sites-env.mjs` preserves the caller's HOME, npm cache, proxy, XDG, and temporary-directory configuration while defaulting Wrangler and Miniflare state to the checkout. If npm reports an unwritable cache, select a writable path with `npm_config_cache` for that install. The `dev` and `start` scripts also keep Wrangler logs inside the checkout. Generated `.sites-runtime/` and `.wrangler/` directories are disposable and ignored by Git.
-
-On portable, `npm run dev` uses `vinext dev` with HMR, starting at port 5173. Vinext records the running server in ignored `.vinext/` state, rejects an ordinary duplicate launch, and recovers stale state after a stopped process; exactly simultaneous starts can race. Pass `--port <port>` or `--hostname <host>` after `npm run dev --` when needed; keep portable previews on loopback.
-
-For browser QA on managed Linux, use `sites-preview start`. The project's dev script runs Vite and accepts the supervisor's `--host 0.0.0.0 --port 4173 --strictPort` arguments. The internal browser uses `http://terminal.local:4173/`; it is not a user-facing URL. The supervisor owns the preview lifecycle. The ignored local profile survives the supervisor's cleared process environment.
-
-The portable profile simulates ChatGPT sign-in only for loopback development requests. Visit `/signin-with-chatgpt?return_to=/` to sign in as `local_seedy` (`seedy@sites.test`, display name `Seedy`) and `/signout-with-chatgpt?return_to=/` to sign out. The development cookie preserves that identity across server restarts. Mock auth is disabled in the managed-linux profile and is not included in production builds; hosted authentication remains dispatch-owned.
-
-The Worker uses `vinext/server/fetch-handler`, including Vinext's config-aware image handling. After building, `npm start` runs that Worker locally through Wrangler on `127.0.0.1`, sharing `.wrangler/state` with dev preview and local D1 migrations; it does not deploy the site or simulate sign-in. Use the URL printed by the server. Pass `npm start -- --port <port>` to select a different built-preview port.
-
-Local previews use Miniflare's placeholder `Request.cf` metadata without a network lookup. Set `CLOUDFLARE_CF_FETCH_ENABLED=true` to opt into fetching preview metadata; this setting does not change hosted request metadata.
-
-Local tool usage metrics are disabled by default. Set `WRANGLER_SEND_METRICS=true` to opt in.
-
-## Included Shape
-
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `@cloudflare/workers-types` provides Worker types; `cloudflare-env.d.ts` declares optional `DB`/`BUCKET` bindings—update these declarations if binding names change
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
-
-The user ID is stable for the same user on the same Site and different across Sites. Use it as the durable user key; use email and name for display or contact purposes.
-
-SIWC-authenticated workspace sites may also receive `oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty `name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by `oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use the returned `userId` as the stable user key for user-owned records; do not use email as a durable identifier.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send anonymous visitors through Sign in with ChatGPT.
-- In a Server Component, start sign-in with `<a href={chatGPTSignInPath(returnTo)} target="_top">`. The auth helper module is server-only; do not import it into a Client Component.
-- Do not use `fetch`, XHR, a client-side router, or a framework link that can prefetch the sign-in route. SIWC must start as a top-level navigation.
-- Never request the AuthAPI authorization endpoint directly. The dispatch-owned `/signin-with-chatgpt` route must start the SIWC flow.
-- Use `chatGPTSignOutPath(returnTo)` for browser sign-out links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the OAuth cookies, and identity header injection. Do not implement app routes for those reserved paths. Routes that do not import and call the helper remain anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the Sites hosting platform's access policy controls for workspace-wide restrictions, or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Local D1 migrations
-
-For a D1-backed local preview, generate SQL with `npm run db:generate`. Build once through the Sites skill's build entrypoint (or `npm run build` for standalone use) to generate `dist/server/wrangler.json`, rebuilding if bindings change. From the project root, apply each pending migration in order:
+Requires Node 22.13+ (Node 24 recommended).
 
 ```sh
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_example.sql
+npm ci
+cp .env.example .env
+npm run build
 ```
 
-Replace the filename with the pending migration and `DB` with your D1 binding name if different. Use `.wrangler/state`, not `.wrangler/state/v3`; Wrangler adds the versioned directories. Do not replay migrations already applied locally. This updates only the preview database; publishing applies production migrations separately.
+Apply the SQL migrations in `drizzle/` in order. For a fresh database, start with `0000_aspiring_post.sql`. For an existing database, apply only migrations not already applied:
 
-## Diagnostic Commands
+```sh
+node --import ./scripts/sites-env.mjs node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_aspiring_post.sql
+node --import ./scripts/sites-env.mjs node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0001_brief_black_cat.sql
+node --import ./scripts/sites-env.mjs node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0002_aberrant_kylun.sql
+```
 
-- `npm run install:ci`: perform the one locked dependency install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build the deployable Sites artifact
-- `npm run start`: preview the built Worker locally with D1/R2 support
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+Check `drizzle/` for subsequent migrations and apply those too, once each. Then run `npm run dev` and open the printed URL. The starter's loopback-only sign-in middleware supplies a local development identity. Hosted authentication is handled by the private Sites dispatcher; there is no production authentication bypass in app routes.
 
-When using the Sites plugin, follow its skill instructions for installation, builds, and publishing. These npm commands remain available for standalone use.
+## Real card connections
 
-The portable build runs Vinext directly without a host `timeout` command. The managed-linux build uses `scripts/build-verified.sh` and its existing `SITES_BUILD_TIMEOUT` setting.
+1. Create an account at [Plaid Dashboard](https://dashboard.plaid.com/) and obtain **Production or Trial** access for the **Transactions** product. Sandbox credentials and Sandbox public tokens are deliberately rejected. Institution access depends on your plan and Plaid's current coverage; Amex uses OAuth. Check the institution's status in your Plaid Dashboard and Link.
+2. Serve Ledger from an HTTPS address. Register the exact callback `https://YOUR_APP_ORIGIN/plaid/oauth` in Plaid Dashboard → Developers → API → Allowed redirect URIs. The configured callback must have the same origin as the app you use to connect. A localhost preview is sufficient for CSVs and empty-state review, but Production OAuth requires the HTTPS app.
+3. Configure these **server-side** environment variables. For local development, use ignored `.env`; for hosting, configure Sites runtime secrets and redeploy. Local `.env` does not configure the hosted site.
 
-## Learn More
+| Variable | Value |
+| --- | --- |
+| `PLAID_ENV` | `production` |
+| `PLAID_CLIENT_ID` | Your Plaid client ID |
+| `PLAID_SECRET` | Your Production secret; store as a secret |
+| `PLAID_TOKEN_ENCRYPTION_KEY` | A stable Base64-encoded 32-byte random key; store as a secret |
+| `PLAID_REDIRECT_URI` | The exact allowlisted HTTPS URL ending in `/plaid/oauth` |
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+Generate the encryption key with `openssl rand -base64 32` and save it securely. Do not commit it or change it after linking accounts without a token re-encryption plan. Access tokens and temporary Link tokens are encrypted with AES-256-GCM and bound to their owner and connection/session ID. Tokens never go to the client. The browser stores only a temporary opaque session ID while an OAuth redirect is in progress.
+
+4. In Ledger, select **Connect a card**, choose your institution, and complete Plaid/bank authentication yourself. Authorize the credit cards you want to see. Your bank password does not pass through Ledger.
+5. Initial history can take a few minutes. Ledger requests up to 730 days, subject to institution availability. It retries initial history while open, checks every five minutes while visible, and supports **Sync**. It downloads Plaid's latest available data; it does not force a paid `/transactions/refresh` call. It does not run background jobs while the app is closed or claim webhook delivery through the private Sites sign-in gate.
+
+One active Plaid connection per institution is supported. Multiple cards in that connection have separate account IDs. Reconnect repairs an existing connection; Disconnect revokes Plaid access and retains already downloaded history. Re-linking after a disconnect may result in new Plaid IDs; inspect overlapping retained history before using totals.
+
+Only USD credit card transactions are included. Pending charges are visible but excluded from spending totals and recurring-payment detection. Refunds reduce spending; card payments are excluded. Recurring patterns are estimates based on similar amounts and regular timing, not confirmed subscriptions. Apple Card remains out of scope for this iteration.
+
+## Insights
+
+Set `OPENAI_API_KEY` as a server secret, and optionally `OPENAI_MODEL` (default `gpt-5-mini`). Without a key, deterministic spending summaries remain available and are labeled **Instant analysis**. When asking live AI, the app sends your question and a bounded spending summary to OpenAI, using the Responses API with `store: false`; it does not send bank credentials or Plaid tokens. Normal provider data policies still apply.
+
+## Validation
+
+```sh
+npm test
+npm run typecheck
+npm run build
+```
+
+Tests use synthetic fixtures only in process memory / ignored `.test-build`; they never seed the app database or call Plaid. They cover CSV parsing, amounts, recurrence, Production-only configuration, encryption, synchronization pagination, pending transitions, atomic rollback, ownership boundaries, and disconnect behavior. Real-bank login must be verified by the account owner after credentials are configured.
+
+## Implementation
+
+React/TypeScript, Vinext, Cloudflare Workers and D1, with private Sites hosting. APIs authenticate every request, enforce ownership in queries, and reject cross-origin mutations. Sync writes all data changes and the new cursor in one atomic D1 batch under a per-Item lease. If pagination changes mid-sync, the fetch restarts from the original cursor. There are no raw bank credentials or sample transactions in storage or production code.
+
+Official integration references: [Transactions](https://plaid.com/docs/transactions/add-to-app/), [OAuth](https://plaid.com/docs/link/oauth/), [Sync](https://plaid.com/docs/api/products/transactions/), [OAuth access requirements](https://support.plaid.com/hc/en-us/articles/15769780649751-How-do-I-get-access-to-OAuth-institutions).

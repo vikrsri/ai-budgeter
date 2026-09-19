@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseStatement,csvRows,parseAmount,parseDate} from '../.test-build/import-csv.mjs';
 import {detectRecurring,advanceDate} from '../.test-build/recurring.mjs';
-import {spending,demoTransactions} from '../.test-build/transactions.mjs';
+import {spending} from '../.test-build/transactions.mjs';
 const row=(date,amount=1299,source='amex',merchant='Netflix')=>({id:date+source,date,amount,source,merchant,category:'Entertainment',kind:'purchase'});
 test('Amex amounts become cents; refunds and payments stay separate',()=>{const r=parseStatement('Date,Description,Amount\n09/01/2026,NETFLIX,12.99\n09/02/2026,REFUND,-5.25\n09/03/2026,AUTOPAY PAYMENT,-200.00','amex');assert.deepEqual(r.map(x=>[x.amount,x.kind]),[[1299,'purchase'],[-525,'credit'],[-20000,'payment']]);assert.equal(spending(r),774);});
 test('Discover dates, quoted amounts, BOM, and extra columns',()=>{const r=parseStatement('\uFEFFTrans. Date,Post Date,Description,Amount,Category\r\n09/01/2026,09/02/2026,"STORE, INC","1,234.56",Shopping','discover');assert.equal(r[0].amount,123456);assert.equal(r[0].merchant,'STORE, INC');assert.equal(r[0].date,'2026-09-01');});
@@ -18,4 +18,3 @@ test('Refunds, payments, amount variation, and irregular purchases are excluded'
 test('Different cards do not combine into a recurring pattern',()=>{assert.equal(detectRecurring([row('2026-01-10'),row('2026-02-10',1299,'discover')]).length,0);});
 test('Overdue patterns are marked instead of silently advanced',()=>{const r=detectRecurring([row('2026-01-10'),row('2026-02-10')],'2026-09-19')[0];assert.equal(r.nextDate,'2026-03-10');assert.equal(r.overdue,true);});
 test('Weekly normalization and leap dates',()=>{const r=detectRecurring([row('2026-09-01'),row('2026-09-08'),row('2026-09-15')],'2026-09-19')[0];assert.equal(r.cadence,'Weekly');assert.equal(r.monthly,Math.round(1299*52/12));assert.equal(advanceDate('2024-02-29',12,0),'2025-02-28');});
-test('Demo sample finds known monthly subscriptions',()=>{const names=detectRecurring(demoTransactions()).map(r=>r.merchant);assert.ok(names.includes('Spotify'));assert.ok(names.includes('Netflix'));assert.ok(!names.includes('Whole Foods Market'));});

@@ -1,0 +1,4 @@
+import {checkOrigin,HttpError,ownerId,routeError} from "@/lib/server";
+import {createLink,resumeLink} from "@/lib/plaid-service";
+export async function POST(request:Request){try{checkOrigin(request);const owner=await ownerId();const payload=await request.json() as {itemId?:unknown};if(payload.itemId!==undefined&&(typeof payload.itemId!=="string"||payload.itemId.length>200))throw new HttpError("Invalid connection.");return Response.json(await createLink(owner,new URL(request.url).origin,payload.itemId as string|undefined),{headers:{"Cache-Control":"no-store"}});}catch(e){return routeError(e);}}
+export async function GET(request:Request){try{const owner=await ownerId(),id=new URL(request.url).searchParams.get("sessionId");if(!id||id.length>100)throw new HttpError("Missing connection session.");return Response.json(await resumeLink(owner,id),{headers:{"Cache-Control":"no-store"}});}catch(e){return routeError(e);}}

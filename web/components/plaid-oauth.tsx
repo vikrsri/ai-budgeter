@@ -1,0 +1,5 @@
+"use client";
+import {useEffect,useRef,useState} from "react";
+import {Loader2} from "lucide-react";
+import {api,startPlaid} from "@/lib/plaid-link";
+export default function OAuthReturn(){const started=useRef(false),[error,setError]=useState("");useEffect(()=>{if(started.current)return;started.current=true;void startPlaid({resume:true,onSaved:async itemId=>{const result=await api<{results:{ok:boolean;error?:string}[]}>("/api/plaid/sync",{itemId});if(result.results.some(r=>!r.ok)){setError("Your card was connected, but the first sync needs attention. Return to Accounts and try Sync again.");return;}window.location.replace("/?connected=1");},onExit:()=>window.location.replace("/?connection=cancelled"),onError:setError}).catch(e=>setError(e.message));},[]);return <main className="oauth-return panel"><h1>Finish connecting your card</h1>{error?<p className="form-error" role="alert">{error}</p>:<p><Loader2 size={20} className="animate-spin"/>Resuming your secure Plaid connection…</p>}<a href="/" className="text-button">Return to Ledger</a></main>;}

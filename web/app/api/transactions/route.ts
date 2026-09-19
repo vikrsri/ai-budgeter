@@ -1,6 +1,8 @@
+import {linkedAccounts} from "@/lib/plaid-service";
+import {plaidStatus} from "@/lib/plaid-client";
 import {checkOrigin,database,HttpError,ownerId,readTransactions,routeError,runtimeEnv} from "@/lib/server";
 import {parseStatement} from "@/lib/import-csv";
-export async function GET(){try{const owner=await ownerId();return Response.json({transactions:await readTransactions(owner),aiConfigured:!!runtimeEnv.OPENAI_API_KEY},{headers:{"Cache-Control":"no-store"}});}catch(e){return routeError(e);}}
+export async function GET(request:Request){try{const owner=await ownerId();return Response.json({transactions:await readTransactions(owner),aiConfigured:!!runtimeEnv.OPENAI_API_KEY,accounts:await linkedAccounts(owner),plaid:plaidStatus(runtimeEnv,new URL(request.url).origin)},{headers:{"Cache-Control":"no-store"}});}catch(e){return routeError(e);}}
 export async function POST(request:Request){try{
  checkOrigin(request);const owner=await ownerId();
  const raw=await request.text();if(raw.length>2100000)throw new HttpError("The file is too large. Use a CSV under 2 MB.",413);

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `idx_plaid_owner_active_institution` ON `plaid_items` (`owner`,`institution_id`) WHERE "plaid_items"."status" <> 'disconnected';

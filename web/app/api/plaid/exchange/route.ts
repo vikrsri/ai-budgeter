@@ -1,0 +1,3 @@
+import {checkOrigin,HttpError,ownerId,routeError} from "@/lib/server";
+import {exchangeLink} from "@/lib/plaid-service";
+export async function POST(request:Request){try{checkOrigin(request);const owner=await ownerId();const payload=await request.json() as {sessionId?:unknown;publicToken?:unknown};if(typeof payload.sessionId!=="string"||payload.sessionId.length>100||typeof payload.publicToken!=="string"||payload.publicToken.length>500)throw new HttpError("Invalid connection response.");return Response.json(await exchangeLink(owner,payload.sessionId,payload.publicToken),{headers:{"Cache-Control":"no-store"}});}catch(e){return routeError(e);}}

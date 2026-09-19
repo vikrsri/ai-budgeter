@@ -8,8 +8,8 @@ export function advanceDate(date:string,months:number,days:number) {
 }
 export function detectRecurring(rows:Transaction[],today=new Date().toISOString().slice(0,10)):Recurring[] {
  const groups=new Map<string,Transaction[]>();
- for(const row of rows.filter(t=>t.kind==="purchase"&&t.amount>0)) {
-  const key=row.source+":"+row.merchant.toLowerCase().replace(/\s+#?\d{4,}$/g,"").replace(/\s+/g," ").trim();groups.set(key,[...(groups.get(key)||[]),row]);
+ for(const row of rows.filter(t=>t.kind==="purchase"&&!t.pending&&t.amount>0)) {
+  const key=(row.accountId||row.source)+":"+row.merchant.toLowerCase().replace(/\s+#?\d{4,}$/g,"").replace(/\s+/g," ").trim();groups.set(key,[...(groups.get(key)||[]),row]);
  }
  const result:Recurring[]=[];
  for(const [id,history] of groups) {
