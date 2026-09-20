@@ -1,4 +1,4 @@
-import {categoryFor,type Source,type Transaction} from "./transactions";
+import {categoryFor,isDiscoverDirectPay,type Source,type Transaction} from "./transactions";
 import {PlaidError} from "./plaid-client";
 export type PlaidAccount={account_id:string;name:string;official_name:string|null;mask:string|null;type:string;subtype:string|null};
 export type PlaidTransaction={transaction_id:string;account_id:string;amount:number;date:string;name:string;merchant_name:string|null;pending:boolean;pending_transaction_id:string|null;iso_currency_code:string|null;personal_finance_category?:{primary:string;detailed:string}|null};
@@ -9,7 +9,7 @@ export function normalizePlaid(t:PlaidTransaction,account:PlaidAccount,source:So
  const cents=Math.round((Math.abs(t.amount)+Number.EPSILON)*100)*Math.sign(t.amount);
  if(!Number.isSafeInteger(cents)||!/^\d{4}-\d{2}-\d{2}$/.test(t.date))throw Error("Invalid transaction received from Plaid");
  const merchant=t.merchant_name||t.name,detail=t.personal_finance_category?.detailed||"";
- const payment=detail.includes("CREDIT_CARD_PAYMENT")||(!t.merchant_name&&/\bautopay\b|payment received|payment thank you|online payment|automatic payment/i.test(t.name));
+ const payment=detail.includes("CREDIT_CARD_PAYMENT")||isDiscoverDirectPay(t.name,source,cents)||isDiscoverDirectPay(merchant,source,cents)||(!t.merchant_name&&/\bautopay\b|payment received|payment thank you|online payment|automatic payment/i.test(t.name));
  const primary=t.personal_finance_category?.primary||"";
  const categories:Record<string,string>={FOOD_AND_DRINK:"Food & drink",TRANSPORTATION:"Transport",TRAVEL:"Travel",ENTERTAINMENT:"Entertainment",GENERAL_MERCHANDISE:"Shopping",RENT_AND_UTILITIES:"Bills & utilities",MEDICAL:"Health"};
  const category=payment?"Payments":detail.includes("GROCERIES")?"Groceries":categories[primary]||categoryFor(merchant);

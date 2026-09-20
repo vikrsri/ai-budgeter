@@ -1,4 +1,4 @@
-import { categoryFor, type Source, type Transaction } from "./transactions";
+import { categoryFor, isDiscoverDirectPay, type Source, type Transaction } from "./transactions";
 export type ParsedTransaction = Omit<Transaction,"id"> & { dedupeKey: string };
 // RFC 4180 quoted fields, escaped quotes, BOM, CRLF, and embedded newlines.
 export function csvRows(text:string): string[][] {
@@ -45,7 +45,7 @@ export function parseStatement(text:string,source:Source,negativePurchases=false
   try {
    const merchant=(row[descCol]||"").trim().replace(/\s+/g," ");if(!merchant||merchant.length>500)throw Error("Missing or overly long merchant description.");
    const date=parseDate(row[dateCol]||""),amount=parseAmount(row[amountCol]||"")*(negativePurchases?-1:1);
-   const payment=/\b(payment|autopay)\b|thank you/i.test(merchant),kind=payment?"payment":amount<0?"credit":"purchase";
+   const payment=isDiscoverDirectPay(merchant,source,amount)||/\b(payment|autopay)\b|thank you/i.test(merchant),kind=payment?"payment":amount<0?"credit":"purchase";
    const category=payment?"Payments":(row[catCol]?.trim().slice(0,80)||categoryFor(merchant));
    const reference=refCol>=0?row[refCol]?.trim():"";
    const base=JSON.stringify([source,date,merchant.toLowerCase(),amount]);
