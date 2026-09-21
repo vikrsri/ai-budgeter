@@ -130,3 +130,29 @@ body{font-size:16px}.eyebrow,.workspace-label,.data-pill,.subtle-label,.insight-
 .import-detected{display:flex;align-items:flex-start;gap:12px;padding:15px;border:1px solid #cce2d8;border-radius:8px;background:#f1f8f4;color:#39755e}.import-detected>svg{flex-shrink:0;margin-top:2px}.import-detected strong{font-size:14px}.import-detected p{font-size:13px;line-height:1.65;margin-top:5px;color:#668273}
 .import-dialog{overflow-x:hidden}.import-dialog>*{min-width:0}
 .bank-card.apple{background:linear-gradient(135deg,#f7f8fa,#e5e9ed);border:1px solid #dbe2e7;color:#34424c}.mini-card.apple{background:#e8edf0;color:#394b55}.card-dot.apple{background:#88999d}.imported-heading{margin-top:28px}.sidebar-accounts .imported-sidebar-card{text-align:left;width:100%;margin-top:0;color:#b9c8ce}.imported-sidebar-card small{display:block;font-size:10px;color:#8ba4af;margin-top:3px}.imported-sidebar-card:hover{background:#203b43}
+
+/* Wrap transaction descriptions within the panel instead of widening the table. */
+.transaction-list{container-type:inline-size;min-width:0}
+.transaction-table{table-layout:fixed;width:100%}
+.transaction-table [data-slot=table-head],.transaction-table [data-slot=table-cell]{padding-left:16px;padding-right:16px}
+.transaction-table th:nth-child(1){width:auto}
+.transaction-table th:nth-child(2){width:6rem}
+.transaction-table th:nth-child(3){width:17%}
+.transaction-table th:nth-child(4){width:22%}
+.transaction-table th:nth-child(5){width:8rem}
+.transaction-table td:not(.amount){white-space:normal;overflow-wrap:anywhere}
+.transaction-table .merchant{min-width:0;align-items:flex-start}
+.transaction-table .merchant>span:last-child{min-width:0}
+.transaction-table .merchant strong{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+.transaction-table .category{display:inline-block;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+@container (max-width:700px){
+ .transaction-table,.transaction-table tbody{display:block}
+ .transaction-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+ .transaction-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:8px 16px;padding:16px}
+ .transaction-table [data-slot=table-cell]{display:block;min-width:0;padding:0}
+ .transaction-table td:nth-child(1){grid-column:1;grid-row:1}
+ .transaction-table td:nth-child(5){grid-column:2;grid-row:1}
+ .transaction-table td:nth-child(2){grid-column:1;grid-row:2}
+ .transaction-table td:nth-child(3){grid-column:2;grid-row:2;text-align:right}
+ .transaction-table td:nth-child(4){grid-column:1 / -1;grid-row:3;color:#82909a}
+}
