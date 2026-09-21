@@ -126,3 +126,7 @@ body{font-size:16px}.eyebrow,.workspace-label,.data-pill,.subtle-label,.insight-
 .account-filter-options{max-width:calc(100vw - 32px)}
 .account-filter-options [data-slot=select-item]{white-space:normal;overflow-wrap:anywhere}
 @media(max-height:820px){.sidebar-note{display:none}.ledger-sidebar [data-slot=sidebar-footer],.ledger-sidebar-footer{padding:14px 17px}.ledger-sidebar [data-slot=sidebar-header],.ledger-sidebar-header{padding:20px 24px 24px}}
+
+.import-detected{display:flex;align-items:flex-start;gap:12px;padding:15px;border:1px solid #cce2d8;border-radius:8px;background:#f1f8f4;color:#39755e}.import-detected>svg{flex-shrink:0;margin-top:2px}.import-detected strong{font-size:14px}.import-detected p{font-size:13px;line-height:1.65;margin-top:5px;color:#668273}
+.import-dialog{overflow-x:hidden}.import-dialog>*{min-width:0}
+.bank-card.apple{background:linear-gradient(135deg,#f7f8fa,#e5e9ed);border:1px solid #dbe2e7;color:#34424c}.mini-card.apple{background:#e8edf0;color:#394b55}.card-dot.apple{background:#88999d}.imported-heading{margin-top:28px}.sidebar-accounts .imported-sidebar-card{text-align:left;width:100%;margin-top:0;color:#b9c8ce}.imported-sidebar-card small{display:block;font-size:10px;color:#8ba4af;margin-top:3px}.imported-sidebar-card:hover{background:#203b43}

@@ -66,3 +66,13 @@ test('Selecting one card isolates its spending, recurring history and AI totals'
  assert.equal(filterAccountTransactions(rows,'csv','csv:amex').length,2);
  assert.equal(isAccountSelection('plaid:gold','plaid'),true);assert.equal(isAccountSelection('csv:amex','plaid'),false);assert.equal(isAccountSelection('plaid:','plaid'),false);
 });
+test('Confirmed Oura membership names are corrected throughout saved history without changing amounts',()=>{
+ const legacy={...row('2026-09-09',638,'amex','Wea'),provider:'plaid',accountId:'card'};
+ const corrected=normalizeStoredTransaction(legacy);
+ assert.equal(corrected.merchant,'Oura Ring');assert.equal(corrected.amount,638);assert.equal(legacy.merchant,'Wea');
+ assert.deepEqual(normalizeStoredTransaction(corrected),corrected);
+ const history=['2026-07-09','2026-08-09','2026-09-09'].map(date=>normalizeStoredTransaction({...legacy,id:date,date}));
+ assert.equal(detectRecurring(history)[0].merchant,'Oura Ring');assert.equal(summarize(history,'2026-09').merchants[0].name,'Oura Ring');
+ assert.equal(normalizeStoredTransaction({...legacy,provider:'csv',merchant:'OURARING INC SAN FRANCISCO CA'}).merchant,'Oura Ring');
+ for(const other of [{...legacy,amount:26954},{...legacy,source:'discover'},{...legacy,provider:'csv'},{...legacy,kind:'credit',amount:-638},{...legacy,merchant:'Wea Store'}])assert.equal(normalizeStoredTransaction(other),other);
+});

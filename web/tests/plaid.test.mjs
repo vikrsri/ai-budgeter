@@ -25,6 +25,14 @@ test('Discover DirectPay stays a payment when Plaid supplies a merchant or merch
  const alias=normalizePlaid({...direct,name:'CARD CREDIT',merchant_name:'DIRECTPAY FULL BALANCE'},account,'discover');assert.equal(alias.kind,'payment');
  const refund=normalizePlaid({...direct,name:'AplPay Coffee refund',merchant_name:'Coffee'},account,'discover');assert.equal(refund.kind,'credit');
 });
+test('Oura statement descriptions override incorrect enriched merchant labels on future syncs',()=>{
+ const incoming=txn('oura',{amount:6.38,name:'OURARING INC SAN FRANCISCO CA',merchant_name:'Wea'});
+ assert.equal(normalizePlaid(incoming,account,'amex').merchant,'Oura Ring');
+ assert.equal(normalizePlaid({...incoming,amount:7.38},account,'amex').merchant,'Oura Ring');
+ assert.equal(normalizePlaid({...incoming,name:'Wea'},account,'amex').merchant,'Oura Ring');
+ assert.equal(normalizePlaid({...incoming,name:'Wea',amount:269.54},account,'amex').merchant,'Wea');
+ assert.equal(normalizePlaid({...incoming,name:'SWEARING STORE',amount:7.38},account,'amex').merchant,'Wea');
+});
 // Exercise the real service SQL against SQLite with an in-process D1 adapter.
 writeFileSync(new URL('../.test-build/server.mjs',import.meta.url),`export {HttpError} from './errors.mjs'; export const runtimeEnv=${JSON.stringify(config)};let db;export const database=()=>db;export const setDatabase=value=>{db=value;};`);
 const server=await import('../.test-build/server.mjs');

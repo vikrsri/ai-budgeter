@@ -1,6 +1,6 @@
-export type Source = "amex" | "discover" | "other";
+export type Source = "amex" | "discover" | "apple" | "other";
 export type Transaction = { id: string; date: string; merchant: string; amount: number; source: Source; category: string; kind: "purchase" | "credit" | "payment"; accountId?: string | null; accountName?: string | null; provider?: "csv" | "plaid"; pending?: boolean; currency?: string; };
-export const sourceNames = { amex: "American Express", discover: "Discover", other: "Other card" };
+export const sourceNames = { amex: "American Express", discover: "Discover", apple: "Apple Card", other: "Other card" };
 export const money = (cents: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 export const shortDate = (date: string) => new Date(date + "T12:00:00Z").toLocaleDateString("en-US", {month:"short", day:"numeric", timeZone:"UTC"});
 export function categoryFor(merchant: string) {
@@ -20,11 +20,21 @@ export function monthKey(date = new Date()) { return `${date.getFullYear()}-${St
 export function isDiscoverDirectPay(description:string,source:Source,amount:number) {
  return source==="discover" && amount<0 && /^DIRECTPAY FULL BALANCE(?:\s|$)/i.test(description.trim());
 }
+export function statementMerchant(merchant:string,description=merchant) {
+ // The bank's explicit Oura descriptor is stronger evidence than an enriched label.
+ return /\bOURA[\s-]*RING\b/i.test(description)||/^oura$/i.test(merchant.trim())?"Oura Ring":merchant;
+}
 // Apply current classification to saved history too; Plaid may never modify an old payment again.
 export function normalizeStoredTransaction(transaction:Transaction):Transaction {
- return transaction.kind==="credit" && isDiscoverDirectPay(transaction.merchant,transaction.source,transaction.amount)
-  ? {...transaction,kind:"payment",category:"Payments"}
-  : transaction;
+ let merchant=statementMerchant(transaction.merchant);
+ // Confirmed against the Amex statement: this $6.38 Oura membership was labeled
+ // "Wea" by Plaid. Legacy rows lack the bank descriptor, so keep this fallback
+ // limited to that exact charge signature; don't rename unrelated Wea purchases.
+ if(transaction.provider==="plaid"&&transaction.source==="amex"&&transaction.amount===638&&transaction.kind==="purchase"&&/^wea$/i.test(merchant.trim()))merchant="Oura Ring";
+ const corrected=merchant===transaction.merchant?transaction:{...transaction,merchant};
+ return corrected.kind==="credit" && isDiscoverDirectPay(corrected.merchant,corrected.source,corrected.amount)
+  ? {...corrected,kind:"payment",category:"Payments"}
+  : corrected;
 }
 export function spendingBreakdown(rows:Transaction[]) {
  let purchases=0,credits=0,payments=0,pendingPurchases=0,pendingCount=0,paymentCount=0;
@@ -48,17 +58,30 @@ export type PlaidStatus = {ready:boolean; message:string; missing:string[]};
 export function transactionAccountKey(transaction:Transaction) {
  return transaction.provider==="plaid"?`plaid:${transaction.accountId||""}`:`csv:${transaction.source}`;
 }
-export function accountOptions(accounts:LinkedAccount[],rows:Transaction[],provider:"plaid"|"csv") {
- if(provider==="plaid")return accounts.filter(a=>a.status!=="disconnected").map(a=>({
-  value:`plaid:${a.id}`,
-  label:[...new Set([a.institution,a.name].filter(Boolean)),a.mask?`••${a.mask}`:""].filter(Boolean).join(" · "),
- }));
- return [...new Set(rows.filter(t=>(t.provider||"csv")==="csv").map(t=>t.source))]
-  .map(source=>({value:`csv:${source}`,label:sourceNames[source]})).sort((a,b)=>a.label.localeCompare(b.label));
+export type AccountView="cards"|"plaid"|"csv";
+export type ImportedAccount={id:string;source:Source;name:string;count:number;latestDate:string};
+export function importedAccounts(rows:Transaction[]):ImportedAccount[] {
+ const groups=new Map<Source,ImportedAccount>();
+ for(const t of rows.filter(t=>(t.provider||"csv")==="csv")) {
+  const existing=groups.get(t.source);
+  if(existing){existing.count++;if(t.date>existing.latestDate)existing.latestDate=t.date;}
+  else groups.set(t.source,{id:`csv:${t.source}`,source:t.source,name:sourceNames[t.source],count:1,latestDate:t.date});
+ }
+ return [...groups.values()].sort((a,b)=>a.name.localeCompare(b.name));
 }
-export function isAccountSelection(value:unknown,provider:"plaid"|"csv"):value is string {
- return typeof value==="string"&&(value==="all"||(provider==="csv"?["csv:amex","csv:discover","csv:other"].includes(value):value.startsWith("plaid:")&&value.length>6&&value.length<=256));
+export function accountOptions(accounts:LinkedAccount[],rows:Transaction[],provider:AccountView) {
+ const linked=accounts.filter(a=>a.status!=="disconnected").map(a=>({value:`plaid:${a.id}`,label:[...new Set([a.institution,a.name].filter(Boolean)),a.mask?`••${a.mask}`:""].filter(Boolean).join(" · ")}));
+ const imported=importedAccounts(rows).filter(a=>provider==="csv"||a.source==="apple").map(a=>({value:a.id,label:a.name}));
+ return provider==="plaid"?linked:provider==="csv"?imported:[...linked,...imported];
 }
-export function filterAccountTransactions(rows:Transaction[],provider:"plaid"|"csv",account:string) {
- return rows.filter(t=>(t.provider||"csv")===provider&&(account==="all"||transactionAccountKey(t)===account));
+export function isAccountSelection(value:unknown,provider:AccountView):value is string {
+ if(typeof value!=="string")return false;
+ if(value==="all")return true;
+ if(provider!=="csv"&&value.startsWith("plaid:")&&value.length>6&&value.length<=256)return true;
+ return provider==="cards"?value==="csv:apple":provider==="csv"&&["csv:amex","csv:discover","csv:apple","csv:other"].includes(value);
+}
+export function filterAccountTransactions(rows:Transaction[],provider:AccountView,account:string) {
+ // Apple CSVs are an additional card. Other CSV statements stay separate from
+ // linked cards to avoid counting overlapping Amex/Discover history twice.
+ return rows.filter(t=>(provider==="cards"?(t.provider==="plaid"||((t.provider||"csv")==="csv"&&t.source==="apple")):(t.provider||"csv")===provider)&&(account==="all"||transactionAccountKey(t)===account));
 }

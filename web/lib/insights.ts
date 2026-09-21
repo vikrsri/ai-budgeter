@@ -10,7 +10,7 @@ export function summarize(rows:Transaction[],month:string) {
 }
 export function instantInsight(rows:Transaction[],question:string,month:string):string {
  const summary=summarize(rows,month),q=question.toLowerCase(),period=month==="all"?"all imported history":month;
- if(!rows.length)return "Connect a card or import real transactions from Amex or Discover to see a spending summary.";
+ if(!rows.length)return "Connect a card or import real transactions from Apple Card, Amex, or Discover to see a spending summary.";
  if(/recurr|subscri|every month|monthly bill/.test(q)) {
   const active=summary.recurring.filter(r=>!r.overdue),total=active.reduce((s,r)=>s+r.monthly,0);
   return summary.recurring.length?`I found ${summary.recurring.length} possible recurring payments across all available history: ${active.length} current and ${summary.recurring.length-active.length} past or needing review. Current patterns have an estimated monthly equivalent of ${money(total)}.\n\n${summary.recurring.map(r=>`${r.merchant}: ${money(r.amount)} · ${r.cadence.toLowerCase()} · ${r.overdue?"past / needs review":"current"} (${r.count} matching charges${r.variableAmount?", amount varies":""})`).join("\n")}\n\nThese are patterns in your statement history, not confirmed subscriptions. Open Recurring to review every matching transaction.`:"There is not enough consistent history to identify recurring payments yet. Import at least two billing cycles; three or more gives stronger evidence.";

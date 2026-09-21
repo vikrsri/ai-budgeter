@@ -49,7 +49,7 @@ Generate the encryption key with `openssl rand -base64 32` and save it securely.
 
 One active Plaid connection per institution is supported. Multiple cards in that connection have separate account IDs. Reconnect repairs an existing connection; Disconnect revokes Plaid access and retains already downloaded history. Re-linking after a disconnect may result in new Plaid IDs; inspect overlapping retained history before using totals.
 
-Only USD credit card transactions are included. Pending charges are visible but excluded from spending totals and recurring-payment detection. Refunds reduce spending; card payments are excluded. Recurring patterns are estimates based on similar amounts and regular timing, not confirmed subscriptions. Apple Card remains out of scope for this iteration.
+Only USD credit card transactions are included. Pending charges are visible but excluded from spending totals and recurring-payment detection. Refunds reduce spending; card payments are excluded. Recurring patterns are estimates based on similar amounts and regular timing, not confirmed subscriptions. Apple Card CSV exports are detected automatically. The first successful upload creates an Apple Card entry derived from its saved transactions; later uploads reuse it and skip matching rows. My cards combines Plaid history with Apple Card CSV imports. Amex and Discover CSV history stays in the separate CSV statements view to avoid double-counting linked-card data. Apple Card updates require another CSV upload; no Apple developer credentials are used.
 
 ## Insights
 
