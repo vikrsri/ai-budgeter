@@ -1,6 +1,9 @@
 import type {Transaction,Source} from "./transactions";
 
 export type Recurring={id:string;merchant:string;source:Source;amount:number;monthly:number;cadence:string;confidence:"Likely"|"Possible";count:number;lastDate:string;nextDate:string;overdue:boolean;variableAmount:boolean;missedCycles:boolean;history:Transaction[]};
+export type SubscriptionCandidate={id:string;merchant:string;source:Source;accountName:string|null;amount:number;lastDate:string;count:number;evidence:"CSV subscription description";history:Transaction[]};
+const merchantGroup=(row:Transaction)=>(row.accountId||`${row.provider||"csv"}:${row.source}`)+":"+row.merchant.toLowerCase().replace(/\s+#?\d{4,}$/g,"").replace(/\s+/g," ").trim();
+const postedPurchase=(row:Transaction)=>row.kind==="purchase"&&!row.pending&&row.amount>0;
 const dayMs=86400000;
 const utc=(s:string)=>new Date(s+"T12:00:00Z");
 const median=(xs:number[])=>{const a=[...xs].sort((a,b)=>a-b);return a.length%2?a[Math.floor(a.length/2)]:(a[a.length/2-1]+a[a.length/2])/2;};
@@ -32,8 +35,8 @@ function intervalCycles(previous:Transaction,current:Transaction,pattern:Pattern
 
 export function detectRecurring(rows:Transaction[],today=new Date().toISOString().slice(0,10)):Recurring[] {
  const groups=new Map<string,Transaction[]>();
- for(const row of rows.filter(t=>t.kind==="purchase"&&!t.pending&&t.amount>0)) {
-  const key=(row.accountId||`${row.provider||"csv"}:${row.source}`)+":"+row.merchant.toLowerCase().replace(/\s+#?\d{4,}$/g,"").replace(/\s+/g," ").trim();
+ for(const row of rows.filter(postedPurchase)) {
+  const key=merchantGroup(row);
   if(!groups.has(key))groups.set(key,[]);
   groups.get(key)!.push(row);
  }
@@ -86,4 +89,24 @@ export function detectRecurring(rows:Transaction[],today=new Date().toISOString(
   }
  }
  return result.sort((a,b)=>Number(a.overdue)-Number(b.overdue)||a.nextDate.localeCompare(b.nextDate)||a.merchant.localeCompare(b.merchant));
+}
+
+// A CSV often contains just one statement. Keep explicit subscription descriptions
+// visible without treating a single charge as proof of a billing schedule.
+// Generic merchants (Apple, Google, Amazon, etc.) alone are not evidence.
+export function findSubscriptionCandidates(rows:Transaction[],recurring=detectRecurring(rows)):SubscriptionCandidate[] {
+ const detectedGroups=new Set(recurring.flatMap(r=>r.history.map(merchantGroup)));
+ const groups=new Map<string,Transaction[]>();
+ for(const row of rows) {
+  if((row.provider||"csv")!=="csv"||!postedPurchase(row))continue;
+  if(!/\b(?:subscr(?:iption)?s?|membership|recurring)\b/i.test(row.merchant))continue;
+  const key=merchantGroup(row);
+  if(detectedGroups.has(key))continue;
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key)!.push(row);
+ }
+ return [...groups].map(([key,rows])=>{
+  const history=[...rows].sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id)),latest=history[0];
+  return {id:`candidate:${key}`,merchant:latest.merchant,source:latest.source,accountName:latest.accountName||null,amount:latest.amount,lastDate:latest.date,count:history.length,evidence:"CSV subscription description" as const,history};
+ }).sort((a,b)=>b.lastDate.localeCompare(a.lastDate)||a.merchant.localeCompare(b.merchant));
 }

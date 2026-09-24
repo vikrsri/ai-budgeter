@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {detectRecurring} from '../.test-build/recurring.mjs';
+import {detectRecurring,findSubscriptionCandidates} from '../.test-build/recurring.mjs';
 import {monthKey} from '../.test-build/transactions.mjs';
-import {instantInsight} from '../.test-build/insights.mjs';
+import {instantInsight,summarize} from '../.test-build/insights.mjs';
 const charge=(date,amount=1000,extra={})=>({id:`${date}:${amount}`,date,amount,merchant:'Service',source:'amex',accountId:'one',category:'Software',kind:'purchase',...extra});
 
 test('Current month uses the local calendar near a UTC month boundary',()=>{
@@ -47,4 +47,32 @@ test('Similar-price purchases at busy merchants do not imply recurring bills',()
  const rows=[charge('2026-01-01',2900),charge('2026-01-08',3100),charge('2026-01-15',2950),charge('2026-01-02',8000),charge('2026-01-03',7500),charge('2026-01-10',6500),charge('2026-01-22',4600),charge('2026-02-02',6100)];
  assert.equal(detectRecurring(rows).length,0);
  assert.equal(detectRecurring([charge('2026-01-01',4000),charge('2026-02-01',4700)]).length,0);
+});
+
+const csvCharge=(extra={})=>charge('2026-09-01',1499,{accountId:null,source:'apple',provider:'csv',merchant:'Example *subscr',...extra});
+test('Explicit CSV subscription descriptions are review candidates without invented schedules',()=>{
+ const rows=[csvCharge(),csvCharge({id:'earlier',date:'2026-08-03',merchant:'Another membership'}),csvCharge({id:'older',date:'2026-07-05',merchant:'Another membership',amount:7900})];
+ const found=findSubscriptionCandidates(rows);
+ assert.equal(found.length,2);assert.equal(found[0].merchant,'Example *subscr');assert.equal(found[1].count,2);
+ assert.ok(found.every(r=>!('monthly' in r)&&!('nextDate' in r)&&!('cadence' in r)));
+ assert.equal(detectRecurring(rows).length,0);
+});
+test('CSV candidates exclude ordinary purchases, payments, credits, pending and Plaid transactions',()=>{
+ const rows=[csvCharge({merchant:'Apple'}),csvCharge({merchant:'Google'}),csvCharge({merchant:'Subscript Books'}),csvCharge({kind:'payment'}),csvCharge({kind:'credit',amount:-1499}),csvCharge({pending:true}),csvCharge({amount:0}),csvCharge({amount:-1499}),csvCharge({provider:'plaid',accountId:'linked'})];
+ assert.deepEqual(findSubscriptionCandidates(rows),[]);
+});
+test('CSV candidates stay separate by card and existing patterns are not listed again',()=>{
+ const rows=[csvCharge(),csvCharge({id:'prior',date:'2026-08-01'}),csvCharge({id:'discover',source:'discover'}),csvCharge({id:'amex',source:'amex',provider:undefined})];
+ assert.equal(detectRecurring(rows).length,1);
+ const candidates=findSubscriptionCandidates(rows);
+ assert.deepEqual(candidates.map(r=>r.source).sort(),['amex','discover']);
+ assert.ok(candidates.every(r=>r.count===1));
+});
+test('Recurring insights surface CSV candidates separately without adding cost estimates',()=>{
+ const rows=[csvCharge()],summary=summarize(rows,'2026-08');
+ assert.equal(summary.recurring.length,0);assert.equal(summary.subscriptionCandidates.length,1);
+ assert.equal('history' in summary.subscriptionCandidates[0],false);
+ const answer=instantInsight(rows,'Show recurring payments','2026-08');
+ assert.match(answer,/Example \*subscr/);assert.match(answer,/Apple Card/);assert.match(answer,/last charge \$14\.99/);
+ assert.match(answer,/frequency and active status are unconfirmed/);assert.match(answer,/excluded from recurring cost estimates/);
 });

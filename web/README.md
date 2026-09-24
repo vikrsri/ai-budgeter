@@ -51,6 +51,12 @@ One active Plaid connection per institution is supported. Multiple cards in that
 
 Only USD credit card transactions are included. Pending charges are visible but excluded from spending totals and recurring-payment detection. Refunds reduce spending; card payments are excluded. Recurring patterns are estimates based on similar amounts and regular timing, not confirmed subscriptions. Apple Card CSV exports are detected automatically. The first successful upload creates an Apple Card entry derived from its saved transactions; later uploads reuse it and skip matching rows. My cards combines Plaid history with Apple Card CSV imports. Amex and Discover CSV history stays in the separate CSV statements view to avoid double-counting linked-card data. Apple Card updates require another CSV upload; no Apple developer credentials are used.
 
+## Recurring payments from CSV
+
+Recurring analyzes the selected accounts' full history, including Apple Card CSV imports in **My cards** and other imports in **CSV statements**. Upload earlier or later statements for the same card to add billing cycles; identical re-uploads are skipped. Two similar, regularly timed charges can establish a possible pattern, with three or more providing stronger evidence.
+
+CSV merchant descriptions that explicitly mention a subscription, membership, or recurring charge appear under **Subscriptions to review** even before a schedule is detected. These entries show recorded charges only: they have no assumed renewal date or frequency and are excluded from recurring cost estimates. When the history supports a recurring pattern, the entry moves into the detected list without being counted twice. A generic merchant name alone is not enough to identify a subscription from one charge.
+
 ## Insights
 
 Set `OPENAI_API_KEY` as a server secret, and optionally `OPENAI_MODEL` (default `gpt-5-mini`). Without a key, deterministic spending summaries remain available and are labeled **Instant analysis**. When asking live AI, the app sends your question and a bounded spending summary to OpenAI, using the Responses API with `store: false`; it does not send bank credentials or Plaid tokens. Normal provider data policies still apply.

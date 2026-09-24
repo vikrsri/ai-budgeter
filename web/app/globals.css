@@ -121,6 +121,20 @@ body{font-size:16px}.eyebrow,.workspace-label,.data-pill,.subtle-label,.insight-
 .history-scope{display:inline-flex;align-items:center;padding:9px 13px;border:1px solid #dce5e9;border-radius:7px;background:#fff;color:#637c88;font-size:14px}
 .recurring-tools{padding-top:0}
 .recurring-detail{overflow-y:auto}
+.subscription-candidates{margin-top:23px}
+.subscription-candidates .panel-heading{align-items:flex-start;flex-wrap:wrap}
+.subscription-candidates .panel-heading p{max-width:690px;line-height:1.7}
+.subscription-candidates .text-button{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.subscription-candidate-list{list-style:none;padding:0;margin:0}
+.subscription-candidate{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:24px;width:100%;text-align:left;padding:20px 24px;border-top:1px solid #e8edf0}
+.subscription-candidate:hover{background:#f6faf8}
+.subscription-candidate .merchant{min-width:0}
+.subscription-candidate .merchant strong{overflow-wrap:anywhere;white-space:normal}
+.candidate-evidence small,.candidate-amount small{display:block;color:#80909a;font-size:12px;margin-top:8px}
+.candidate-amount{text-align:right;font-variant-numeric:tabular-nums}
+.candidate-amount strong{font-weight:550}
+.recurring-detail .primary-button{margin-top:24px}
+@media(max-width:767px){.subscription-candidate{grid-template-columns:minmax(0,1fr) auto;gap:16px}.subscription-candidate .merchant{grid-column:1/-1}.candidate-evidence small,.candidate-amount small{font-size:11px}}
 .filter-row .account-filter{max-width:min(420px,55%);min-width:0}
 .account-filter [data-slot=select-value]{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .account-filter-options{max-width:calc(100vw - 32px)}
@@ -145,6 +159,12 @@ body{font-size:16px}.eyebrow,.workspace-label,.data-pill,.subtle-label,.insight-
 .transaction-table .merchant>span:last-child{min-width:0}
 .transaction-table .merchant strong{white-space:normal;overflow-wrap:anywhere;line-height:1.5}
 .transaction-table .category{display:inline-block;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.column-sort{display:flex;align-items:center;gap:6px;width:100%;min-height:36px;text-align:inherit;border-radius:4px;color:inherit;white-space:normal}
+.column-sort svg{flex-shrink:0;opacity:.55}
+.column-sort:hover,.column-sort[data-active=true]{color:#247b73}
+.column-sort[data-active=true] svg{opacity:1}
+.transaction-table .amount .column-sort{justify-content:flex-end}
+@media(max-width:480px){.topbar .data-pill{display:none}}
 @container (max-width:700px){
  .transaction-table,.transaction-table tbody{display:block}
  .transaction-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
@@ -155,4 +175,7 @@ body{font-size:16px}.eyebrow,.workspace-label,.data-pill,.subtle-label,.insight-
  .transaction-table td:nth-child(2){grid-column:1;grid-row:2}
  .transaction-table td:nth-child(3){grid-column:2;grid-row:2;text-align:right}
  .transaction-table td:nth-child(4){grid-column:1 / -1;grid-row:3;color:#82909a}
+ .transaction-table.sortable thead{display:block;position:static;width:auto;height:auto;margin:0;overflow:visible;clip-path:none;white-space:normal}
+ .transaction-table.sortable thead tr{display:flex;flex-wrap:wrap;gap:4px 16px;padding:8px 16px}
+ .transaction-table.sortable [data-slot=table-head]{display:block;width:auto;padding:0;height:auto}
 }

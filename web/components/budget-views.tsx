@@ -9,29 +9,32 @@ import {Textarea} from "@/components/ui/textarea";
 import {Table,TableBody,TableCell,TableHead,TableHeader,TableRow} from "@/components/ui/table";
 import {money,shortDate,sourceNames,type Transaction,type Source,type AccountView} from "@/lib/transactions";
 import {parseStatement,detectStatementSource,type StatementSource} from "@/lib/import-csv";
-import {detectRecurring} from "@/lib/recurring";
+import {detectRecurring,findSubscriptionCandidates} from "@/lib/recurring";
 import {MerchantIcon,TransactionTable} from "./transaction-table";
+import {defaultTransactionSort,nextTransactionSort,sortTransactions,transactionSortOptions,type TransactionSort} from "@/lib/transaction-sort";
 export function TransactionsView({rows,onImport}:{rows:Transaction[];onImport:()=>void}) {
- const [query,setQuery]=useState(""),[category,setCategory]=useState("all"),[page,setPage]=useState(0),[sort,setSort]=useState("newest");
+ const [query,setQuery]=useState(""),[category,setCategory]=useState("all"),[page,setPage]=useState(0),[sort,setSort]=useState<TransactionSort>(defaultTransactionSort);
  const categories=[...new Set(rows.map(t=>t.category))].sort();
- const filtered=rows.filter(t=>(category==="all"||t.category===category)&&`${t.merchant} ${t.category} ${t.date}`.toLowerCase().includes(query.toLowerCase())).sort((a,b)=>sort==="amount"?b.amount-a.amount:sort==="oldest"?a.date.localeCompare(b.date):b.date.localeCompare(a.date));
+ const filtered=sortTransactions(rows.filter(t=>(category==="all"||t.category===category)&&`${t.merchant} ${t.category} ${t.date}`.toLowerCase().includes(query.toLowerCase())),sort);
  const pages=Math.max(1,Math.ceil(filtered.length/15)),currentPage=Math.min(page,pages-1);
- return <section className="panel"><div className="transaction-tools"><div className="search-field"><Search size={17}/><Input aria-label="Search transactions" placeholder="Search merchants or transactions…" value={query} onChange={e=>{setQuery(e.target.value);setPage(0);}}/></div><Select value={category} onValueChange={v=>{setCategory(v);setPage(0);}}><SelectTrigger aria-label="Filter category"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select><Select value={sort} onValueChange={setSort}><SelectTrigger aria-label="Sort transactions"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="amount">Largest first</SelectItem></SelectContent></Select></div>{filtered.length?<TransactionTable rows={filtered.slice(currentPage*15,currentPage*15+15)}/>:<Empty title="No transactions found" text="Try another search or import a statement for this period." onImport={onImport}/>}<div className="table-pagination"><span>{filtered.length} transactions · payments excluded from spending totals</span><div><button aria-label="Previous page" disabled={!currentPage} onClick={()=>setPage(currentPage-1)}><ChevronLeft size={17}/></button><span>{currentPage+1} / {pages}</span><button aria-label="Next page" disabled={currentPage>=pages-1} onClick={()=>setPage(currentPage+1)}><ChevronRight size={17}/></button></div></div></section>;
+ return <section className="panel"><div className="transaction-tools"><div className="search-field"><Search size={17}/><Input aria-label="Search transactions" placeholder="Search merchants or transactions…" value={query} onChange={e=>{setQuery(e.target.value);setPage(0);}}/></div><Select value={category} onValueChange={v=>{setCategory(v);setPage(0);}}><SelectTrigger aria-label="Filter category"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select><Select value={`${sort.column}:${sort.direction}`} onValueChange={value=>{const option=transactionSortOptions.find(option=>option.value===value);if(option){setSort(option.sort);setPage(0);}}}><SelectTrigger aria-label="Sort transactions"><SelectValue/></SelectTrigger><SelectContent>{transactionSortOptions.map(option=><SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div>{filtered.length?<TransactionTable rows={filtered.slice(currentPage*15,currentPage*15+15)} sort={sort} onSort={column=>{setSort(current=>nextTransactionSort(current,column));setPage(0);}}/>:<Empty title="No transactions found" text="Try another search or import a statement for this period." onImport={onImport}/>}<div className="table-pagination"><span>{filtered.length} transactions · payments excluded from spending totals</span><div><button aria-label="Previous page" disabled={!currentPage} onClick={()=>setPage(currentPage-1)}><ChevronLeft size={17}/></button><span>{currentPage+1} / {pages}</span><button aria-label="Next page" disabled={currentPage>=pages-1} onClick={()=>setPage(currentPage+1)}><ChevronRight size={17}/></button></div></div></section>;
 }
 function Empty({title,text,onImport}:{title:string;text:string;onImport:()=>void}) {return <div className="empty-state"><FileSpreadsheet size={32}/><h2>{title}</h2><p>{text}</p><button className="primary-button" onClick={onImport}><Upload size={16}/>Import a statement</button></div>;}
 export function RecurringView({rows,onImport}:{rows:Transaction[];onImport:()=>void}) {
  const recurring=useMemo(()=>detectRecurring(rows),[rows]);
+ const candidates=useMemo(()=>findSubscriptionCandidates(rows,recurring),[rows,recurring]);
  const [detailId,setDetailId]=useState<string|null>(null),[query,setQuery]=useState(""),[status,setStatus]=useState("all");
  const detail=recurring.find(r=>r.id===detailId),active=recurring.filter(r=>!r.overdue),monthly=active.reduce((s,r)=>s+r.monthly,0);
+ const candidateDetail=candidates.find(r=>r.id===detailId);
  const filtered=recurring.filter(r=>(status==="all"||(status==="current"?!r.overdue:r.overdue))&&`${r.merchant} ${r.cadence} ${r.history[0]?.accountName||sourceNames[r.source]}`.toLowerCase().includes(query.toLowerCase()));
  return <>
   <section className="stats-grid">
    <div className="stat-card"><div className="stat-label">Estimated monthly cost<Repeat2 size={18}/></div><div className="stat-number">{money(monthly)}</div><div className="stat-foot">Current patterns, using the latest charge</div></div>
-   <div className="stat-card"><div className="stat-label">All recurring payments</div><div className="stat-number">{recurring.length}</div><div className="stat-foot">{active.length} current · {recurring.length-active.length} past or need review</div></div>
+   <div className="stat-card"><div className="stat-label">Detected recurring patterns</div><div className="stat-number">{recurring.length}</div><div className="stat-foot">{active.length} current · {recurring.length-active.length} past or need review{candidates.length>0&&<><br/>{candidates.length} more to review from CSV below</>}</div></div>
    <div className="stat-card"><div className="stat-label">Estimated yearly cost</div><div className="stat-number">{money(monthly*12)}</div><div className="stat-foot">Assuming current patterns continue</div></div>
   </section>
   <section className="panel">
-   <div className="panel-heading"><div><h2>All recurring payments</h2><p>Every detected pattern across your available history, including older payments and changing amounts.</p></div></div>
+   <div className="panel-heading"><div><h2>Recurring payments</h2><p>Patterns from connected cards and CSV statements, including Apple Card. All available months are included for the selected accounts.</p></div></div>
    <div className="transaction-tools recurring-tools">
     <div className="search-field"><Search size={17}/><Input aria-label="Search recurring payments" placeholder="Search recurring payments…" value={query} onChange={e=>setQuery(e.target.value)}/></div>
     <Select value={status} onValueChange={setStatus}><SelectTrigger aria-label="Filter recurring status"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">All payments</SelectItem><SelectItem value="current">Current</SelectItem><SelectItem value="past">Past / needs review</SelectItem></SelectContent></Select>
@@ -39,21 +42,38 @@ export function RecurringView({rows,onImport}:{rows:Transaction[];onImport:()=>v
    {filtered.length?<Table>
     <TableHeader><TableRow><TableHead>Merchant</TableHead><TableHead>Frequency</TableHead><TableHead>Next expected</TableHead><TableHead>Evidence</TableHead><TableHead className="amount">Last charge</TableHead></TableRow></TableHeader>
     <TableBody>{filtered.map(r=><TableRow key={r.id}>
-     <TableCell><button className="merchant merchant-detail" onClick={()=>setDetailId(r.id)}><MerchantIcon name={r.merchant}/><span><strong>{r.merchant}</strong><small>{r.history[0]?.accountName||sourceNames[r.source]}</small></span></button></TableCell>
+     <TableCell><button className="merchant merchant-detail" onClick={()=>setDetailId(r.id)}><MerchantIcon name={r.merchant}/><span><strong>{r.merchant}</strong><small>{r.history[0]?.accountName||sourceNames[r.source]}{(r.history[0]?.provider||"csv")==="csv"?" · CSV import":""}</small></span></button></TableCell>
      <TableCell>{r.cadence}<small className="muted">{r.variableAmount?"Amount varies":""}</small></TableCell>
      <TableCell>{shortDate(r.nextDate)}<small className={r.overdue?"review-note":"muted"}>{r.overdue?"Past / needs review":"Current · estimated"}</small></TableCell>
      <TableCell><span className={`confidence ${r.confidence==="Likely"?"likely":""}`}>{r.confidence}</span><small className="muted">{r.count} matching charges{r.missedCycles?" · gap in history":""}</small></TableCell>
      <TableCell className="amount">{money(r.amount)}<small className="muted">{shortDate(r.lastDate)}</small></TableCell>
     </TableRow>)}</TableBody>
-   </Table>:recurring.length?<div className="empty-state"><h2>No matching recurring payments</h2><p>Try another search or choose All payments.</p></div>:<Empty title="No recurring patterns found yet" text="Connect a card or import more history. Two similar charges or at least three regularly timed bills help identify a pattern." onImport={onImport}/>}
-   <p className="panel-note">Showing {filtered.length} of {recurring.length} patterns. Recurring analysis always uses all available history, regardless of the dashboard month. These are estimates, not confirmed subscriptions; a new subscription with only one charge may not appear. Select a merchant to review every matching charge.</p>
+   </Table>:recurring.length?<div className="empty-state"><h2>No matching recurring payments</h2><p>Try another search or choose All payments.</p></div>:<Empty title="No repeating schedule found yet" text={candidates.length?"Check the subscriptions to review below. Import earlier CSV statements to establish their billing schedules.":"Import earlier statements for the same card. Two similar charges or at least three regularly timed bills help identify a pattern."} onImport={onImport}/>}
+   <p className="panel-note">Showing {filtered.length} of {recurring.length} patterns. Recurring analysis uses all available history, regardless of the dashboard month. CSV imports join the same card’s history, so patterns update after each upload. These are estimates, not confirmed subscriptions. Select a merchant to review every matching charge.</p>
   </section>
-  <Sheet open={!!detail} onOpenChange={open=>!open&&setDetailId(null)}><SheetContent className="detail-sheet recurring-detail"><SheetHeader><SheetTitle>{detail?.merchant}</SheetTitle><SheetDescription>{detail?.cadence} pattern · {detail?.confidence.toLowerCase()} recurring payment</SheetDescription></SheetHeader><div className="sheet-body">
+  {candidates.length>0&&<section className="panel subscription-candidates" aria-label="Subscriptions to review">
+   <div className="panel-heading"><div><h2>Subscriptions to review <span className="subtle-label">{candidates.length}</span></h2><p>These CSV descriptions mention a subscription, membership, or recurring charge. There isn’t enough regular history to establish a billing schedule yet.</p></div><button className="text-button" onClick={onImport}><Upload size={16}/>Import more history</button></div>
+   <ul className="subscription-candidate-list">{candidates.map(candidate=><li key={candidate.id}><button className="subscription-candidate" onClick={()=>setDetailId(candidate.id)}>
+    <span className="merchant"><MerchantIcon name={candidate.merchant}/><span><strong>{candidate.merchant}</strong><small>{candidate.accountName||sourceNames[candidate.source]} · CSV import</small></span></span>
+    <span className="candidate-evidence"><span className="confidence">Needs more history</span><small>{candidate.count} recorded charge{candidate.count===1?"":"s"}</small></span>
+    <span className="candidate-amount"><strong>{money(candidate.amount)}</strong><small>Last charged {shortDate(candidate.lastDate)}</small></span>
+   </button></li>)}</ul>
+   <p className="panel-note">These entries are unconfirmed and excluded from the monthly and yearly estimates. Import another billing cycle to help detect a repeating pattern. A description alone does not prove a subscription is still active.</p>
+  </section>}
+  <Sheet open={!!detail||!!candidateDetail} onOpenChange={open=>!open&&setDetailId(null)}><SheetContent className="detail-sheet recurring-detail"><SheetHeader><SheetTitle>{detail?.merchant||candidateDetail?.merchant}</SheetTitle><SheetDescription>{detail?`${detail.cadence} pattern · ${detail.confidence.toLowerCase()} recurring payment`:"CSV subscription description · needs more history"}</SheetDescription></SheetHeader><div className="sheet-body">
+   {detail&&<>
    <p>{detail?.history[0]?.accountName||detail&&sourceNames[detail.source]}</p>
    <p>{detail?.overdue?"Expected date passed:":"Next expected:"} <strong>{detail&&shortDate(detail.nextDate)}</strong>. Timing is estimated from previous charges.</p>
    {detail?.variableAmount&&<p>Amounts vary. The monthly estimate uses the most recent matching charge.</p>}
    {detail?.missedCycles&&<p>There is a gap in the billing history. Review the dates to confirm this payment is still recurring.</p>}
    <h3>All matching transactions ({detail?.count})</h3>{detail?.history.map(t=><div className="history-row" key={t.id}><span>{t.date}</span><strong>{money(t.amount)}</strong></div>)}
+   </>}
+   {candidateDetail&&<>
+    <p>{candidateDetail.accountName||sourceNames[candidateDetail.source]} · CSV import</p>
+    <p>The transaction description suggests a subscription or membership. Its frequency, next charge date, and current status are not established. It is excluded from recurring cost estimates.</p>
+    <h3>Recorded transactions ({candidateDetail.count})</h3>{candidateDetail.history.map(t=><div className="history-row" key={t.id}><span>{t.date}</span><strong>{money(t.amount)}</strong></div>)}
+    <button className="primary-button" onClick={()=>{setDetailId(null);onImport();}}><Upload size={16}/>Import another statement</button>
+   </>}
   </div></SheetContent></Sheet>
  </>;
 }

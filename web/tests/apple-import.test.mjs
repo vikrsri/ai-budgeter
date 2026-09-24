@@ -6,6 +6,7 @@ import {parseStatement,detectStatementSource} from '../.test-build/import-csv.mj
 import {saveImportedTransactions} from '../.test-build/import-service.mjs';
 import {accountOptions,importedAccounts,filterAccountTransactions,isAccountSelection,spending} from '../.test-build/transactions.mjs';
 import {summarize} from '../.test-build/insights.mjs';
+import {detectRecurring,findSubscriptionCandidates} from '../.test-build/recurring.mjs';
 
 const header='Transaction Date,Clearing Date,Description,Merchant,Category,Type,Amount (USD),Purchased By';
 const csv=lines=>[header,...lines].join('\n');
@@ -77,4 +78,34 @@ test('My cards includes Apple imports in spending and insights without combining
  assert.deepEqual(accountOptions([],rows,'cards'),[{value:'csv:apple',label:'Apple Card'}]);
  assert.equal(summarize(cards,'2026-09').accounts.find(a=>a.id==='csv:apple').netSpending,1299);
  assert.equal(accountOptions([],[],'cards').length,0);
+});
+
+test('Apple subscriptions move from review to a recurring pattern across saved CSV statements',async()=>{
+ const {sqlite,db,read}=fixture();
+ const statement=date=>csv([purchase(date).replace('Stream Service','Example *subscription')]);
+ const cards=()=>filterAccountTransactions(read('owner'),'cards','all');
+ try{
+  await saveImportedTransactions(db,'owner',parseStatement(statement('08/01/2026')));
+  assert.equal(detectRecurring(cards()).length,0);
+  const [candidate]=findSubscriptionCandidates(cards());
+  assert.equal(candidate.source,'apple');assert.equal(candidate.count,1);assert.equal(candidate.amount,1299);
+  assert.equal('monthly' in candidate,false);assert.equal('nextDate' in candidate,false);
+  // Uploading the same statement twice must not invent recurring evidence.
+  assert.equal((await saveImportedTransactions(db,'owner',parseStatement(statement('08/01/2026')))).duplicates,1);
+  assert.equal(findSubscriptionCandidates(cards())[0].count,1);
+  await saveImportedTransactions(db,'owner',parseStatement(statement('09/01/2026')));
+  const [pattern]=detectRecurring(cards(),'2026-09-15');
+  assert.equal(pattern.cadence,'Monthly');assert.equal(pattern.count,2);assert.equal(pattern.nextDate,'2026-10-01');
+  assert.equal(findSubscriptionCandidates(cards()).length,0);
+  // All history is analyzed even when the dashboard month has no transactions.
+  const summary=summarize(filterAccountTransactions(read('owner'),'cards','csv:apple'),'2026-10');
+  assert.equal(summary.transactionCount,0);assert.equal(summary.recurring.length,1);assert.equal(summary.subscriptionCandidates.length,0);
+  assert.equal(read('another-owner').length,0);
+ }finally{sqlite.close();}
+});
+
+test('CSV recurring detection works for merchants without a subscription keyword too',()=>{
+ const rows=parseStatement(csv([purchase('07/01/2026'),purchase('08/01/2026'),purchase('09/01/2026')]));
+ const [pattern]=detectRecurring(filterAccountTransactions(rows,'cards','csv:apple'),'2026-09-15');
+ assert.equal(pattern.merchant,'Stream Service');assert.equal(pattern.cadence,'Monthly');assert.equal(pattern.confidence,'Likely');assert.equal(pattern.count,3);
 });
